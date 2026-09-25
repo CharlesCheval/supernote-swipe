@@ -1,0 +1,14 @@
+{
+  "name": "PDF ⇄ Note Swipe",
+  "desc": "Swipe up with two fingers to jump between the last opened PDF and the last opened note.",
+  "author": "Charles Cheval",
+  "iconPath": "assets/icon_swipe.png",
+  "versionName": "0.5.0",
+  "versionCode": "6",
+  "pluginID": "dah8j7uyj686oebv",
+  "pluginKey": "SwipeSwitch",
+  "jsMainPath": "index",
+  "uses-permissions": [
+    "plugin.permission.FILE:READ"
+  ]
+}
