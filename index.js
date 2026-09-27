@@ -7,6 +7,7 @@ import App from './App';
 import {name as appName} from './app.json';
 
 import {PluginManager} from 'sn-plugin-lib';
+import {loadSettings} from './src/settings';
 import {start} from './src/switcher';
 
 /** Toolbar buttons registered by the first release; the host keeps them until they are unregistered. */
@@ -16,7 +17,15 @@ AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
 
-// No toolbar button: the plugin only reacts to the two-finger gesture.
+// No toolbar button: the plugin only reacts to the swipe. Settings live in the plugin manager.
+PluginManager.registerConfigButton();
+PluginManager.registerConfigButtonListener({
+  onClick() {
+    PluginManager.showPluginView();
+  },
+});
+loadSettings();
+
 for (const id of LEGACY_BUTTON_IDS) {
   Promise.resolve()
     .then(() => PluginManager.unregisterButton(id))

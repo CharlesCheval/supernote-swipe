@@ -1,7 +1,8 @@
 import {Dimensions, PixelRatio} from 'react-native';
 import {NativePluginManager, NativeUIUtils, PluginCommAPI, PluginFileAPI, PluginManager} from 'sn-plugin-lib';
-import {DOWN, LEFT, Motion, RIGHT, TOOL_PEN, TwoFingerSwipe, UP, Vec} from './gesture';
+import {DOWN, LEFT, Motion, MultiFingerSwipe, RIGHT, TOOL_PEN, UP, Vec} from './gesture';
 import {getRecent, kindOf, loadRecent, remember} from './recent';
+import {getSettings} from './settings';
 
 /** Screen size in pixels, natural (portrait) orientation: Manta 1920×2560, A6X 1404×1872. */
 function screenPx(): {w: number; h: number} {
@@ -23,6 +24,24 @@ const PEN_QUIET_MS = 400;
  */
 let rotation = 0;
 
+/**
+ * Landscape if the host reports a 90°/270° rotation, or, should it always report
+ * 0, if the plugin's own window is wider than tall.
+ */
+export function isLandscape(): boolean {
+  if (rotation === 1 || rotation === 3) {
+    return true;
+  }
+  const w = Dimensions.get('window');
+  return w.width > w.height;
+}
+
+/** What the plugin currently detects, shown on the settings screen. */
+export function orientationInfo(): string {
+  const w = Dimensions.get('window');
+  return `${isLandscape() ? 'landscape' : 'portrait'} (rotation ${rotation * 90}°, window ${Math.round(w.width)}×${Math.round(w.height)})`;
+}
+
 function directionsFor(r: number): Vec[] {
   switch (r) {
     case 1:
@@ -35,14 +54,17 @@ function directionsFor(r: number): Vec[] {
   }
 }
 
-const detector = new TwoFingerSwipe(() => {
+const detector = new MultiFingerSwipe(() => {
   const {w, h} = screenPx();
+  const settings = getSettings();
+  const fingers = isLandscape() ? settings.landscapeFingers : settings.portraitFingers;
   return {
-    directions: directionsFor(rotation),
+    fingers,
+    directions: directionsFor(isLandscape() && rotation === 0 ? 1 : rotation),
     minDistance: d => (d.x !== 0 ? w : h) * MIN_DISTANCE_RATIO,
     maxDurationMs: 900,
     maxSlope: 0.7,
-    maxLandingGapMs: 300,
+    maxLandingGapMs: fingers >= 3 ? 450 : 300, // three fingers land a little less evenly
     minSeparation: w * 0.03,
     maxSeparation: w * 0.5,
     maxSeparationChange: 0.35,
@@ -75,7 +97,12 @@ function track(e: Motion) {
   trackedDownTime = e.downTime;
   tracked = currentFile().catch(() => null);
   tracked.then(path => remember(path));
-  NativePluginManager.getOrientation()
+  refreshOrientation();
+}
+
+/** Reads the display rotation from the host (0, 1 = 90°, 2 = 180°, 3 = 270°). */
+export function refreshOrientation(): Promise<void> {
+  return NativePluginManager.getOrientation()
     .then(r => {
       rotation = typeof r === 'number' ? r : 0;
     })

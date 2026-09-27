@@ -1,18 +1,27 @@
 # PDF ⇄ Note Swipe — Supernote plugin
 
-**Swipe up with two fingers** to jump between your last PDF and your last note:
+**Swipe up with two fingers** (three in landscape) to jump between your last PDF and your last note:
 
 - **In a note:** the swipe reopens the **last PDF/document** you viewed.
 - **In a PDF:** the swipe reopens the **last note** you viewed.
 
-The file opens on the page you last read. The plugin adds no button and no screen; it only shows up in **Settings → Apps → Plugins**.
+The file opens on the page you last read. The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → PDF ⇄ Note Swipe**.
+
+## Settings
+
+| Setting | Default | Why |
+|---|---|---|
+| Portrait | 2 fingers | |
+| Landscape | 3 fingers | In landscape, a two-finger swipe already scrolls the page |
+
+The settings screen also shows the orientation the plugin currently detects.
 
 ## How it works
 
 - **History:** the SDK does not expose Supernote's "Last Open" history. The plugin keeps its own: on every finger or pen touch, it records the displayed file, one per kind (last note, last document).
 - **Persistence:** the history survives restarts. It is stored in the plugin's private directory as folder names, because the SDK has no API to write a text file.
-- **Gesture:** both fingers each travel at least 15% of the screen, in under 0.9 s, roughly straight. Thresholds are in `src/switcher.ts`.
-- **Landscape:** the display rotation is read at each touch, and "up" follows the way you hold the device.
+- **Gesture:** every finger travels at least 15% of the screen, in under 0.9 s, roughly straight. A swipe with more or fewer fingers than configured never triggers. Thresholds are in `src/switcher.ts`.
+- **Landscape:** the display rotation is read at each touch. It picks the landscape finger count, and "up" follows the way you hold the device.
 - **No false triggers:** a touch only counts as a two-finger swipe when:
   - both fingers land within 300 ms of each other;
   - they are a finger-spacing apart, neither a single blob nor two hands;
