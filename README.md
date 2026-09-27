@@ -43,7 +43,7 @@ The settings live under **Settings → Apps → Plugins → SwipeSwitch**. The p
 
 ## Install
 
-1. Download `SwipeSwitch.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-pdf-note-swipe/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
+1. Download `SwipeSwitch.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-swipeswitch/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
 2. Open **Settings → Apps → Plugins → Add plugin**. It replaces PDF ⇄ Note Swipe in place.
 3. On the first swipe, allow file reading with **Always allow**.
 
