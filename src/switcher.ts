@@ -1,23 +1,55 @@
 import {Dimensions, PixelRatio} from 'react-native';
-import {NativeUIUtils, PluginCommAPI, PluginFileAPI, PluginManager} from 'sn-plugin-lib';
-import {Motion, TwoFingerSwipeUp} from './gesture';
+import {NativePluginManager, NativeUIUtils, PluginCommAPI, PluginFileAPI, PluginManager} from 'sn-plugin-lib';
+import {DOWN, LEFT, Motion, RIGHT, TOOL_PEN, TwoFingerSwipe, UP, Vec} from './gesture';
 import {getRecent, kindOf, loadRecent, remember} from './recent';
 
-/** Screen height in pixels (Manta 2560, A6X 1872). */
-function screenHeightPx(): number {
-  const h = Dimensions.get('screen').height * PixelRatio.get();
-  return h > 0 ? h : 1872;
+/** Screen size in pixels, natural (portrait) orientation: Manta 1920×2560, A6X 1404×1872. */
+function screenPx(): {w: number; h: number} {
+  const s = Dimensions.get('screen');
+  const a = s.width * PixelRatio.get();
+  const b = s.height * PixelRatio.get();
+  return a > 0 && b > 0 ? {w: Math.min(a, b), h: Math.max(a, b)} : {w: 1404, h: 1872};
 }
 
-/** Each finger must travel at least 15% of the screen height. */
+/** Each finger must travel at least 15% of the screen along the swipe axis. */
 const MIN_DISTANCE_RATIO = 0.15;
+/** No swipe while the pen is in use (e.g. a resting palm during a lasso). */
+const PEN_QUIET_MS = 400;
 
-const detector = new TwoFingerSwipeUp(() => ({
-  minDistance: screenHeightPx() * MIN_DISTANCE_RATIO,
-  maxDurationMs: 900,
-  maxSlope: 0.7,
-  maxLandingGapMs: 300,
-}));
+/**
+ * Display rotation (0, 1 = 90°, 2 = 180°, 3 = 270°), refreshed at each touch.
+ * The host may forward coordinates either in the rotated view or in the panel's
+ * natural orientation, so in landscape both readings of "up" are accepted.
+ */
+let rotation = 0;
+
+function directionsFor(r: number): Vec[] {
+  switch (r) {
+    case 1:
+    case 3:
+      return [UP, LEFT, RIGHT];
+    case 2:
+      return [UP, DOWN];
+    default:
+      return [UP];
+  }
+}
+
+const detector = new TwoFingerSwipe(() => {
+  const {w, h} = screenPx();
+  return {
+    directions: directionsFor(rotation),
+    minDistance: d => (d.x !== 0 ? w : h) * MIN_DISTANCE_RATIO,
+    maxDurationMs: 900,
+    maxSlope: 0.7,
+    maxLandingGapMs: 300,
+    minSeparation: w * 0.03,
+    maxSeparation: w * 0.5,
+    maxSeparationChange: 0.35,
+  };
+});
+
+let lastPenAt = 0;
 
 // ---------------------------------------------------------------------------
 // Current file tracking
@@ -37,12 +69,17 @@ let tracked: Promise<string | null> = Promise.resolve(null);
  * switch does not need to query the host again.
  */
 function track(e: Motion) {
-  if (e.downTime === trackedDownTime) {
-    return;
+  if (e.downTime === trackedDownTime && (e.action & 0xff) !== 0) {
+    return; // same touch (a new ACTION_DOWN always counts, even with a stale downTime)
   }
   trackedDownTime = e.downTime;
   tracked = currentFile().catch(() => null);
   tracked.then(path => remember(path));
+  NativePluginManager.getOrientation()
+    .then(r => {
+      rotation = typeof r === 'number' ? r : 0;
+    })
+    .catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +162,11 @@ export function start() {
         return;
       }
       track(e);
-      if (detector.feed(e)) {
+      if (e.toolType === TOOL_PEN || e.pointers.some(p => p.toolType === TOOL_PEN)) {
+        lastPenAt = Date.now();
+      }
+      const fired = detector.feed(e);
+      if (fired && Date.now() - lastPenAt > PEN_QUIET_MS) {
         switchToLastOther();
       }
     },

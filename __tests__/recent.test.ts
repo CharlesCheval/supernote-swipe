@@ -13,3 +13,11 @@ test('file kind', () => {
   expect(kindOf('/a/b.note')).toBe('note');
   expect(kindOf('/a/b.PDF')).toBe('doc');
 });
+
+test('listFiles entries as returned by the native module ({path, type})', () => {
+  const p = '/storage/emulated/0/Note/Maths.note';
+  const name = encodeName(p)!;
+  expect(decodeName({path: `/data/x/recent/note/${name}`, type: 0})).toBe(p);
+  expect(decodeName(null)).toBeNull();
+  expect(decodeName({type: 1})).toBeNull();
+});

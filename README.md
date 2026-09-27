@@ -11,8 +11,15 @@ The file opens on the page you last read. The plugin adds no button and no scree
 
 - **History:** the SDK does not expose Supernote's "Last Open" history. The plugin keeps its own: on every finger or pen touch, it records the displayed file, one per kind (last note, last document).
 - **Persistence:** the history survives restarts. It is stored in the plugin's private directory as folder names, because the SDK has no API to write a text file.
-- **Gesture:** it fires when both fingers each travel at least 15% of the screen height, in under 0.9 s, roughly vertically. Thresholds are in `src/switcher.ts`.
-- **No false triggers from the palm:** both fingers must land within 300 ms of each other; a resting palm lands unevenly.
+- **Gesture:** both fingers each travel at least 15% of the screen, in under 0.9 s, roughly straight. Thresholds are in `src/switcher.ts`.
+- **Landscape:** the display rotation is read at each touch, and "up" follows the way you hold the device.
+- **No false triggers:** a touch only counts as a two-finger swipe when:
+  - both fingers land within 300 ms of each other;
+  - they are a finger-spacing apart, neither a single blob nor two hands;
+  - they move together;
+  - the pen has been idle for 400 ms.
+  
+  Each touch is tracked from its own start, so separate taps (e.g. right after waking up) can never add up into a swipe.
 - **Speed:** the current file is read as soon as the fingers touch the screen. By the time the gesture is recognized, the only call left is `openFile`.
 
 ## Install and build

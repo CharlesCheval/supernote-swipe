@@ -28,8 +28,24 @@ export function encodeName(path: string): string | null {
   return name.length <= MAX_NAME_LENGTH ? name : null;
 }
 
-export function decodeName(entry: string): string | null {
-  const name = entry.replace(/\/+$/, '');
+/**
+ * `FileUtils.listFiles` is typed as returning strings, but the native module
+ * returns `{path, type}` objects (type 0 = folder, 1 = file). Accept both.
+ */
+export function entryPath(entry: unknown): string | null {
+  if (typeof entry === 'string') {
+    return entry;
+  }
+  const path = (entry as {path?: unknown} | null)?.path;
+  return typeof path === 'string' ? path : null;
+}
+
+export function decodeName(entry: unknown): string | null {
+  const path = entryPath(entry);
+  if (!path) {
+    return null;
+  }
+  const name = path.replace(/\/+$/, '');
   try {
     return decodeURIComponent(name.slice(name.lastIndexOf('/') + 1));
   } catch {
@@ -53,7 +69,7 @@ async function loadKind(kind: Kind) {
   if (!dir || !(await FileUtils.exists(dir))) {
     return;
   }
-  const entries = (await FileUtils.listFiles(dir)) ?? [];
+  const entries: unknown[] = (await FileUtils.listFiles(dir)) ?? [];
   const path = entries.map(decodeName).find(Boolean);
   if (path && !memory[kind]) {
     memory[kind] = path;
