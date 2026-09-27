@@ -1,8 +1,10 @@
 import {Dimensions, PixelRatio} from 'react-native';
 import {NativePluginManager, NativeUIUtils, PluginCommAPI, PluginFileAPI, PluginManager} from 'sn-plugin-lib';
-import {DOWN, LEFT, Motion, MultiFingerSwipe, RIGHT, TOOL_PEN, UP, Vec} from './gesture';
-import {getRecent, kindOf, loadRecent, remember} from './recent';
-import {getSettings} from './settings';
+import {Frame, learnFrame, toLogical, watchedDirections} from './directions';
+import {Motion, MultiFingerSwipe, TOOL_PEN} from './gesture';
+import {kindOf, lastOfKind, loadRecent, previousFile, remember} from './recent';
+import {Action, GESTURES, getOptions, getSettings} from './settings';
+import {showView} from './view';
 
 /** Screen size in pixels, natural (portrait) orientation: Manta 1920×2560, A6X 1404×1872. */
 function screenPx(): {w: number; h: number} {
@@ -17,12 +19,14 @@ const MIN_DISTANCE_RATIO = 0.15;
 /** No swipe while the pen is in use (e.g. a resting palm during a lasso). */
 const PEN_QUIET_MS = 400;
 
-/**
- * Display rotation (0, 1 = 90°, 2 = 180°, 3 = 270°), refreshed at each touch.
- * The host may forward coordinates either in the rotated view or in the panel's
- * natural orientation, so in landscape both readings of "up" are accepted.
- */
+// ---------------------------------------------------------------------------
+// Orientation
+// ---------------------------------------------------------------------------
+
+/** Display rotation reported by the host (0, 1 = 90°, 2 = 180°, 3 = 270°), refreshed at each touch. */
 let rotation = 0;
+/** Coordinate frame used by the host in landscape, learned from touches. */
+let frame: Frame = 'unknown';
 
 /**
  * Landscape if the host reports a 90°/270° rotation, or, should it always report
@@ -36,35 +40,57 @@ export function isLandscape(): boolean {
   return w.width > w.height;
 }
 
+/** Rotation used for direction mapping: landscape without a reported rotation is assumed to be 90°. */
+function effectiveRotation(): number {
+  return isLandscape() && rotation !== 1 && rotation !== 3 ? 1 : rotation;
+}
+
+/** Reads the display rotation from the host. */
+export function refreshOrientation(): Promise<void> {
+  return NativePluginManager.getOrientation()
+    .then(r => {
+      const next = typeof r === 'number' ? r : 0;
+      if (next !== rotation) {
+        frame = 'unknown'; // re-learn after a rotation change
+      }
+      rotation = next;
+    })
+    .catch(() => undefined);
+}
+
 /** What the plugin currently detects, shown on the settings screen. */
 export function orientationInfo(): string {
   const w = Dimensions.get('window');
-  return `${isLandscape() ? 'landscape' : 'portrait'} (rotation ${rotation * 90}°, window ${Math.round(w.width)}×${Math.round(w.height)})`;
+  return (
+    `${isLandscape() ? 'landscape' : 'portrait'} · rotation ${rotation * 90}° · ` +
+    `window ${Math.round(w.width)}×${Math.round(w.height)} · touch frame ${frame}`
+  );
 }
 
-function directionsFor(r: number): Vec[] {
-  switch (r) {
-    case 1:
-    case 3:
-      return [UP, LEFT, RIGHT];
-    case 2:
-      return [UP, DOWN];
-    default:
-      return [UP];
-  }
+// ---------------------------------------------------------------------------
+// Gesture detection
+// ---------------------------------------------------------------------------
+
+/** Gestures enabled in the current orientation. */
+function activeGestures() {
+  const s = getSettings();
+  const landscape = isLandscape();
+  return GESTURES.filter(g => {
+    const setting = s[g.id];
+    return setting.action !== 'none' && (landscape ? setting.landscape : setting.portrait);
+  });
 }
 
 const detector = new MultiFingerSwipe(() => {
   const {w, h} = screenPx();
-  const settings = getSettings();
-  const fingers = isLandscape() ? settings.landscapeFingers : settings.portraitFingers;
+  const fingers = [...new Set(activeGestures().map(g => g.fingers))];
   return {
-    fingers,
-    directions: directionsFor(isLandscape() && rotation === 0 ? 1 : rotation),
+    fingers: fingers.length ? fingers : [99], // nothing enabled: nothing can match
+    directions: watchedDirections(isLandscape(), frame),
     minDistance: d => (d.x !== 0 ? w : h) * MIN_DISTANCE_RATIO,
     maxDurationMs: 900,
     maxSlope: 0.7,
-    maxLandingGapMs: fingers >= 3 ? 450 : 300, // three fingers land a little less evenly
+    maxLandingGapMs: n => (n >= 3 ? 450 : 300), // three fingers land a little less evenly
     minSeparation: w * 0.03,
     maxSeparation: w * 0.5,
     maxSeparationChange: 0.35,
@@ -72,6 +98,15 @@ const detector = new MultiFingerSwipe(() => {
 });
 
 let lastPenAt = 0;
+
+/** Last recognized swipe, shown on the settings screen to check the mapping. */
+export let lastGesture = '';
+const gestureListeners = new Set<() => void>();
+
+export function subscribeGesture(fn: () => void): () => void {
+  gestureListeners.add(fn);
+  return () => gestureListeners.delete(fn);
+}
 
 // ---------------------------------------------------------------------------
 // Current file tracking
@@ -88,7 +123,7 @@ let tracked: Promise<string | null> = Promise.resolve(null);
 /**
  * At the start of every touch (finger or pen), read the displayed file.
  * During a gesture this read completes before the swipe ends, so the
- * switch does not need to query the host again.
+ * action does not need to query the host again.
  */
 function track(e: Motion) {
   if (e.downTime === trackedDownTime && (e.action & 0xff) !== 0) {
@@ -100,17 +135,8 @@ function track(e: Motion) {
   refreshOrientation();
 }
 
-/** Reads the display rotation from the host (0, 1 = 90°, 2 = 180°, 3 = 270°). */
-export function refreshOrientation(): Promise<void> {
-  return NativePluginManager.getOrientation()
-    .then(r => {
-      rotation = typeof r === 'number' ? r : 0;
-    })
-    .catch(() => undefined);
-}
-
 // ---------------------------------------------------------------------------
-// Switching
+// Actions
 // ---------------------------------------------------------------------------
 
 let readGranted = false;
@@ -121,10 +147,7 @@ async function ensureReadPermission(): Promise<boolean> {
   }
   const permission = 'plugin.permission.FILE:READ';
   if ((await PluginManager.hasPermission(permission)) < 1) {
-    const choice = await PluginManager.requestPermission(
-      permission,
-      'The swipe gesture needs to open your notes and documents.',
-    );
+    const choice = await PluginManager.requestPermission(permission, 'SwipeSwitch needs to open your notes and documents.');
     if (choice !== 1 && choice !== 2) {
       return false;
     }
@@ -141,38 +164,69 @@ async function notify(message: string) {
   }
 }
 
-let switching = false;
-
-/** From a note: last opened PDF. From a PDF: last opened note. */
-async function switchToLastOther() {
-  if (switching) {
+/** Opens a file at its last read page. */
+export async function openPath(target: string): Promise<void> {
+  if (!(await ensureReadPermission())) {
+    await notify('Read permission denied: the file cannot be opened.');
     return;
   }
-  switching = true;
+  const res: any = await PluginFileAPI.openFile(target, -1);
+  if (!res?.success || !res.result) {
+    await notify(`Cannot open (file moved or deleted?):\n${target}`);
+  }
+}
+
+/** The file an action opens, or a message explaining why there is none. */
+export function targetFor(action: Action, current: string | null, file?: string): {path?: string; missing?: string} {
+  switch (action) {
+    case 'toggle': {
+      const wanted = current && kindOf(current) === 'note' ? 'doc' : 'note';
+      const path = lastOfKind(wanted, current);
+      return path ? {path} : {missing: wanted === 'doc' ? 'No recent PDF yet.' : 'No recent note yet.'};
+    }
+    case 'previous': {
+      const path = previousFile(current);
+      return path ? {path} : {missing: 'No previous file yet.'};
+    }
+    case 'lastNote': {
+      const path = lastOfKind('note', current);
+      return path ? {path} : {missing: 'No recent note yet.'};
+    }
+    case 'lastDoc': {
+      const path = lastOfKind('doc', current);
+      return path ? {path} : {missing: 'No recent PDF yet.'};
+    }
+    case 'file':
+      return file ? {path: file} : {missing: 'No file chosen for this gesture yet (see the plugin settings).'};
+    default:
+      return {};
+  }
+}
+
+let running = false;
+
+async function runAction(action: Action, file?: string) {
+  if (running || action === 'none') {
+    return;
+  }
+  running = true;
   try {
-    const [granted, current] = await Promise.all([ensureReadPermission(), tracked, loadRecent()]);
-    if (!granted) {
-      await notify('Read permission denied: the file cannot be opened.');
+    if (action === 'recent') {
+      await loadRecent();
+      showView('recent');
       return;
     }
-    const wanted = current && kindOf(current) === 'note' ? 'doc' : 'note';
-    const target = getRecent(wanted);
-    if (!target) {
-      await notify(
-        wanted === 'doc'
-          ? 'No recent PDF yet: open a PDF once, then come back.'
-          : 'No recent note yet: open a note once, then come back.',
-      );
-      return;
-    }
-    const res: any = await PluginFileAPI.openFile(target, -1);
-    if (!res?.success || !res.result) {
-      await notify(`Cannot open (file moved or deleted?):\n${target}`);
+    const [current] = await Promise.all([tracked, loadRecent()]);
+    const {path, missing} = targetFor(action, current, file);
+    if (path) {
+      await openPath(path);
+    } else if (missing) {
+      await notify(missing);
     }
   } catch (e: any) {
     await notify(`Error: ${e?.message ?? e}`);
   } finally {
-    switching = false;
+    running = false;
   }
 }
 
@@ -182,6 +236,7 @@ async function switchToLastOther() {
 
 export function start() {
   loadRecent();
+  refreshOrientation();
   PluginManager.registerMotionListener(1, {
     onMsg(msg: unknown) {
       const e = msg as Motion;
@@ -189,12 +244,31 @@ export function start() {
         return;
       }
       track(e);
+      if (isLandscape()) {
+        for (const p of e.pointers) {
+          frame = learnFrame(frame, p, screenPx().w);
+        }
+      }
       if (e.toolType === TOOL_PEN || e.pointers.some(p => p.toolType === TOOL_PEN)) {
         lastPenAt = Date.now();
+        return;
       }
-      const fired = detector.feed(e);
-      if (fired && Date.now() - lastPenAt > PEN_QUIET_MS) {
-        switchToLastOther();
+      const swipe = detector.feed(e);
+      if (!swipe || Date.now() - lastPenAt <= PEN_QUIET_MS) {
+        return;
+      }
+      let logical = toLogical(swipe.direction, effectiveRotation(), isLandscape(), frame);
+      if (logical && isLandscape() && getOptions().landscapeFlip) {
+        logical = logical === 'up' ? 'down' : 'up';
+      }
+      const gesture = activeGestures().find(g => g.fingers === swipe.fingers && g.direction === logical);
+      lastGesture = `${swipe.fingers} fingers ${logical === 'up' ? '↑' : logical === 'down' ? '↓' : '(sideways)'} ${
+        gesture ? `→ ${getSettings()[gesture.id].action}` : '→ no action'
+      }`;
+      gestureListeners.forEach(fn => fn());
+      if (gesture) {
+        const setting = getSettings()[gesture.id];
+        runAction(setting.action, setting.file);
       }
     },
   });

@@ -1,10 +1,13 @@
 /**
- * Multi-finger swipe detection (2 or 3 fingers) from the MotionEvents forwarded by
+ * Multi-finger swipe detection from the MotionEvents forwarded by
  * PluginManager.registerMotionListener (screen pixel coordinates).
  *
- * Deliberately SDK-free so it can be unit-tested. The host's `downTime` is not
- * trusted on its own (after waking from sleep it may not change between two
- * touches): a gesture also starts on ACTION_DOWN and ends on any lift.
+ * It reports WHICH swipe happened (finger count + direction); deciding what to do
+ * with it belongs to the caller. Deliberately SDK-free so it can be unit-tested.
+ *
+ * The host's `downTime` is not trusted on its own (after waking from sleep it may
+ * not change between two touches): a gesture also starts on ACTION_DOWN and ends
+ * on any lift.
  */
 
 export const TOOL_FINGER = 1;
@@ -33,10 +36,12 @@ export const DOWN: Vec = {x: 0, y: 1};
 export const LEFT: Vec = {x: -1, y: 0};
 export const RIGHT: Vec = {x: 1, y: 0};
 
+export type Swipe = {fingers: number; direction: Vec};
+
 export type SwipeOptions = {
-  /** Number of fingers the gesture uses (2 or 3); more or fewer never triggers. */
-  fingers: number;
-  /** Accepted swipe directions (unit vectors). */
+  /** Finger counts that can form a gesture (e.g. [2, 3]); any other count never triggers. */
+  fingers: number[];
+  /** Directions to watch (unit vectors). */
   directions: Vec[];
   /** Minimum travel of EACH finger along a direction (px). */
   minDistance: (direction: Vec) => number;
@@ -45,7 +50,7 @@ export type SwipeOptions = {
   /** Allowed sideways drift, as a fraction of the travel. */
   maxSlope: number;
   /** Max delay between the first and last finger landing (ms); a resting palm lands unevenly. */
-  maxLandingGapMs: number;
+  maxLandingGapMs: (fingers: number) => number;
   /** Allowed distance between fingers at landing (px): closest pair not a single blob, widest pair not both hands. */
   minSeparation: number;
   maxSeparation: number;
@@ -71,7 +76,8 @@ export class MultiFingerSwipe {
   private downTime = Number.NaN;
   private starts = new Map<number, Vec>();
   private firstLanding = 0;
-  private startTime = 0;
+  private lastLanding = 0;
+  private checkedCount = 0;
   private done = true; // fired, abandoned, or no gesture in progress
 
   constructor(private readonly options: () => SwipeOptions) {}
@@ -80,65 +86,64 @@ export class MultiFingerSwipe {
     this.downTime = e.downTime;
     this.starts.clear();
     this.firstLanding = e.eventTime;
+    this.lastLanding = e.eventTime;
+    this.checkedCount = 0;
     this.done = false;
   }
 
-  /** Returns true at the exact moment the gesture is recognized (once per gesture). */
-  feed(e: Motion): boolean {
+  /** Returns the swipe at the exact moment it is recognized (once per gesture), else null. */
+  feed(e: Motion): Swipe | null {
     const action = e.action & 0xff;
     if (action === ACTION_DOWN || e.downTime !== this.downTime) {
       this.reset(e);
     }
-    const pointers = e.pointers ?? [];
-    const lifted = action === ACTION_UP || action === ACTION_CANCEL || action === ACTION_POINTER_UP;
     if (this.done) {
-      return false;
+      return null;
     }
-    if (lifted) {
+    if (action === ACTION_UP || action === ACTION_CANCEL || action === ACTION_POINTER_UP) {
       this.done = true; // a finger left the screen: this gesture is over
-      return false;
+      return null;
     }
+    const pointers = e.pointers ?? [];
     if (e.toolType === TOOL_PEN || pointers.some(p => p.toolType === TOOL_PEN)) {
       this.done = true;
-      return false;
+      return null;
     }
     const o = this.options();
-    if (pointers.length < o.fingers) {
-      return false;
-    }
 
     for (const p of pointers) {
       if (!this.starts.has(p.pointerId)) {
         this.starts.set(p.pointerId, {x: p.x, y: p.y});
-        if (this.starts.size === o.fingers) {
-          this.startTime = e.eventTime;
-        }
+        this.lastLanding = e.eventTime;
       }
     }
-    if (this.starts.size > o.fingers) {
-      this.done = true; // more fingers than configured: another gesture
-      return false;
+    const n = this.starts.size;
+    if (n > Math.max(...o.fingers)) {
+      this.done = true; // more fingers than any gesture uses
+      return null;
     }
-    const current = pointers.slice(0, o.fingers);
-    const origins = current.map(p => this.starts.get(p.pointerId)!);
+    if (!o.fingers.includes(n) || pointers.length !== n) {
+      return null; // not a gesture's finger count (yet)
+    }
+    const origins = pointers.map(p => this.starts.get(p.pointerId)!);
     const startSpread = Math.max(...pairDistances(origins));
-    if (e.eventTime === this.startTime) {
-      const gaps = pairDistances(origins);
+    if (this.checkedCount !== n) {
+      this.checkedCount = n;
       if (
-        this.startTime - this.firstLanding > o.maxLandingGapMs ||
-        Math.min(...gaps) < o.minSeparation ||
+        this.lastLanding - this.firstLanding > o.maxLandingGapMs(n) ||
+        Math.min(...pairDistances(origins)) < o.minSeparation ||
         startSpread > o.maxSeparation
       ) {
         this.done = true; // palm, ghost touch, or two hands
-        return false;
+        return null;
       }
     }
-    if (e.eventTime - this.startTime > o.maxDurationMs) {
+    if (e.eventTime - this.lastLanding > o.maxDurationMs) {
       this.done = true; // too slow
-      return false;
+      return null;
     }
 
-    const moves = current.map((p, i) => ({x: p.x - origins[i].x, y: p.y - origins[i].y}));
+    const moves = pointers.map((p, i) => ({x: p.x - origins[i].x, y: p.y - origins[i].y}));
     for (const d of o.directions) {
       const travels = moves.map(m => dot(m, d));
       if (Math.min(...travels) < o.minDistance(d)) {
@@ -146,9 +151,9 @@ export class MultiFingerSwipe {
       }
       this.done = true;
       const straight = moves.every((m, i) => Math.abs(cross(m, d)) <= o.maxSlope * travels[i]);
-      const together = Math.abs(Math.max(...pairDistances(current)) - startSpread) <= o.maxSeparationChange * startSpread;
-      return straight && together;
+      const together = Math.abs(Math.max(...pairDistances(pointers)) - startSpread) <= o.maxSeparationChange * startSpread;
+      return straight && together ? {fingers: n, direction: d} : null;
     }
-    return false
+    return null;
   }
 }

@@ -1,54 +1,59 @@
-# PDF ⇄ Note Swipe — Supernote plugin
+# SwipeSwitch — Supernote plugin
 
-**Swipe up with two fingers** (three in landscape) to jump between your last PDF and your last note:
+Multi-finger swipes that move you around your files, in notes and PDFs. Formerly **PDF ⇄ Note Swipe**.
 
-- **In a note:** the swipe reopens the **last PDF/document** you viewed.
-- **In a PDF:** the swipe reopens the **last note** you viewed.
+## Gestures
 
-The file opens on the page you last read. The plugin adds no toolbar button. Its settings live under **Settings → Apps → Plugins → PDF ⇄ Note Swipe**.
+Four gestures: **2 or 3 fingers, up or down**. Each one gets an action, and you choose whether it is active in portrait, in landscape, or both.
 
-## Settings
+| Action | What it opens |
+|---|---|
+| PDF ⇄ Note | From a note, the last PDF/document; from a PDF, the last note |
+| Previous file | The file you had open before this one, whatever its type ("back") |
+| Last note / Last PDF | The most recent file of that kind |
+| Open a specific file | A file you pick in Supernote's file browser |
+| Recent files list | Your 12 most recent files; tap one to open it |
 
-| Setting | Default | Why |
-|---|---|---|
-| Portrait | 2 fingers | |
-| Landscape | 3 fingers | In landscape, a two-finger swipe already scrolls the page |
+Files open on the page you last read.
 
-The settings screen also shows the orientation the plugin currently detects.
+**Defaults** (same behaviour as earlier versions):
+- 2 fingers ↑ in portrait: PDF ⇄ Note;
+- 3 fingers ↑ in landscape: PDF ⇄ Note, since two-finger swipes already scroll the page in landscape.
+
+Settings from earlier versions are migrated automatically.
+
+The settings live under **Settings → Apps → Plugins → SwipeSwitch**. The plugin adds no toolbar button. The settings screen also shows the detected orientation and the last recognized swipe. It offers a **swap up/down in landscape** option, in case your device reports its rotation the other way round.
+
+## Limitations
+
+- **Plugins only run in the Note and Document apps.** Swipes are not detected in other apps (e-mail, calendar, KOReader).
+- **No app launching.** The SDK has no API to open other apps, only files.
+- **Supernote's own gestures:** two-finger up/down swipes also scroll the page in landscape (and when zoomed). Assign such gestures carefully.
 
 ## How it works
 
-- **History:** the SDK does not expose Supernote's "Last Open" history. The plugin keeps its own: on every finger or pen touch, it records the displayed file, one per kind (last note, last document).
-- **Persistence:** the history survives restarts. It is stored in the plugin's private directory as folder names, because the SDK has no API to write a text file.
-- **Gesture:** every finger travels at least 15% of the screen, in under 0.9 s, roughly straight. A swipe with more or fewer fingers than configured never triggers. Thresholds are in `src/switcher.ts`.
-- **Landscape:** the display rotation is read at each touch. It picks the landscape finger count, and "up" follows the way you hold the device.
-- **No false triggers:** a touch only counts as a two-finger swipe when:
-  - both fingers land within 300 ms of each other;
-  - they are a finger-spacing apart, neither a single blob nor two hands;
-  - they move together;
-  - the pen has been idle for 400 ms.
-  
-  Each touch is tracked from its own start, so separate taps (e.g. right after waking up) can never add up into a swipe.
-- **Speed:** the current file is read as soon as the fingers touch the screen. By the time the gesture is recognized, the only call left is `openFile`.
+- **History:** the SDK does not expose Supernote's "Last Open" history. The plugin keeps its own: on every finger or pen touch, it records the displayed file (12 most recent).
+- **Persistence:** history and settings survive restarts. They are stored in the plugin's private directory as folder names, because the SDK has no API to write a text file.
+- **Detection:**
+  - every finger travels at least 15% of the screen, in under 0.9 s, roughly straight;
+  - fingers land within 300 ms (450 ms for three) and move together, a finger-spacing apart;
+  - the pen has been idle for 400 ms;
+  - each touch is tracked from its own start, so separate taps (e.g. right after waking up) never add up into a swipe.
+- **Landscape:** the display rotation is read at each touch. The plugin learns whether the host forwards rotated or panel coordinates, so "up" follows the way you hold the device.
 
-## Install and build
+## Install
 
 1. Download `SwipeSwitch.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-pdf-note-swipe/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
-2. Open **Settings → Apps → Plugins → Add plugin**.
+2. Open **Settings → Apps → Plugins → Add plugin**. It replaces PDF ⇄ Note Swipe in place.
 3. On the first swipe, allow file reading with **Always allow**.
 
-To build from source:
+## Build
 
 ```bash
 npm install
 npm run build   # -> build/outputs/SwipeSwitch.snplg
-npx jest        # gesture detector tests
+npx jest        # gesture, direction, history and settings tests
 ```
-
-## Limitations
-
-- **Where it works:** only in the Note and Document apps, the only places where plugins run.
-- **No interception:** the plugin listens to touches but cannot consume them. If Supernote ever binds the same gesture, both actions will run.
 
 ## Releasing
 

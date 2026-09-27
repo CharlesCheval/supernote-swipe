@@ -1,12 +1,12 @@
-import {LEFT, Motion, MultiFingerSwipe, RIGHT, SwipeOptions, UP, Vec} from '../src/gesture';
+import {DOWN, LEFT, Motion, MultiFingerSwipe, RIGHT, SwipeOptions, UP, Vec} from '../src/gesture';
 
-const opts = (directions: Vec[] = [UP], fingers = 2) => (): SwipeOptions => ({
+const opts = (directions: Vec[] = [UP], fingers: number[] = [2]) => (): SwipeOptions => ({
   fingers,
   directions,
   minDistance: () => 300,
   maxDurationMs: 900,
   maxSlope: 0.7,
-  maxLandingGapMs: 300,
+  maxLandingGapMs: n => (n >= 3 ? 450 : 300),
   minSeparation: 60,
   maxSeparation: 960,
   maxSeparationChange: 0.35,
@@ -48,7 +48,7 @@ function swipe({dir = UP, dist = 500, drift = 0, duration = 300, downTime = 1000
   return events;
 }
 
-const run = (d: MultiFingerSwipe, events: Motion[]) => events.filter(e => d.feed(e)).length;
+const run = (d: MultiFingerSwipe, events: Motion[]) => events.filter(e => d.feed(e) !== null).length;
 
 test('clean two-finger swipe up: recognized exactly once', () => {
   expect(run(new MultiFingerSwipe(opts()), swipe())).toBe(1);
@@ -101,11 +101,23 @@ test('landscape: sideways swipes accepted only when allowed', () => {
 });
 
 test('three-finger setting: only a three-finger swipe triggers', () => {
-  const three = () => new MultiFingerSwipe(opts([UP], 3));
+  const three = () => new MultiFingerSwipe(opts([UP], [3]));
   expect(run(three(), swipe({fingers: 3, gap: 200}))).toBe(1);
   expect(run(three(), swipe({fingers: 2}))).toBe(0); // e.g. a two-finger scroll in landscape
 });
 
 test('two-finger setting: a three-finger swipe does not trigger', () => {
-  expect(run(new MultiFingerSwipe(opts([UP], 2)), swipe({fingers: 3, gap: 200}))).toBe(0);
+  expect(run(new MultiFingerSwipe(opts([UP], [2])), swipe({fingers: 3, gap: 200}))).toBe(0);
+});
+
+test('reports which swipe happened: finger count and direction', () => {
+  const both = () => new MultiFingerSwipe(opts([UP, DOWN], [2, 3]));
+  const fired = (events: Motion[]) => {
+    const d = both();
+    return events.map(e => d.feed(e)).find(r => r !== null) ?? null;
+  };
+  expect(fired(swipe())).toEqual({fingers: 2, direction: UP});
+  expect(fired(swipe({dir: DOWN}))).toEqual({fingers: 2, direction: DOWN});
+  expect(fired(swipe({fingers: 3, gap: 200}))).toEqual({fingers: 3, direction: UP});
+  expect(fired(swipe({fingers: 3, gap: 200, dir: DOWN}))).toEqual({fingers: 3, direction: DOWN});
 });

@@ -9,6 +9,7 @@ import {name as appName} from './app.json';
 import {PluginManager} from 'sn-plugin-lib';
 import {loadSettings} from './src/settings';
 import {start} from './src/switcher';
+import {showView} from './src/view';
 
 /** Toolbar buttons registered by the first release; the host keeps them until they are unregistered. */
 const LEGACY_BUTTON_IDS = [201, 202];
@@ -17,11 +18,11 @@ AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
 
-// No toolbar button: the plugin only reacts to the swipe. Settings live in the plugin manager.
+// No toolbar button: the plugin only reacts to swipes. Settings live in the plugin manager.
 PluginManager.registerConfigButton();
 PluginManager.registerConfigButtonListener({
   onClick() {
-    PluginManager.showPluginView();
+    showView('settings');
   },
 });
 loadSettings();
