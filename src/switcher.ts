@@ -23,11 +23,8 @@ function screenPx(): {w: number; h: number} {
 
 /** Each finger must travel at least 15% of the screen along the swipe axis. */
 const MIN_DISTANCE_RATIO = 0.15;
-/**
- * No swipe while the pen is in use (e.g. a resting palm during a lasso), nor
- * right after: the last strokes must reach the note before it is left.
- */
-const PEN_QUIET_MS = 1000;
+/** No swipe while the pen is in use (e.g. a resting palm during a lasso). */
+const PEN_QUIET_MS = 400;
 
 // ---------------------------------------------------------------------------
 // Orientation
