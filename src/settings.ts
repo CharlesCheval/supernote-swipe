@@ -86,6 +86,48 @@ export function entryName(entry: unknown): string | null {
   return trimmed.slice(trimmed.lastIndexOf('/') + 1);
 }
 
+/**
+ * A gesture is saved as several short folder names: `v~<json without the file>`,
+ * the file path in pieces `f~NN~<part>`, and a `~complete` marker. A whole
+ * gesture as ONE name broke the 255-character limit of a file name with a long
+ * file path, and that gesture was then never saved.
+ */
+const COMPLETE = '~complete';
+const PART = 180;
+
+export function encodeGesture(g: GestureSetting): string[] {
+  const {file, ...rest} = g;
+  const names = [`v~${encodeURIComponent(JSON.stringify(rest))}`];
+  const path = file ? encodeURIComponent(file) : '';
+  for (let i = 0; i * PART < path.length; i++) {
+    names.push(`f~${String(i).padStart(2, '0')}~${path.slice(i * PART, (i + 1) * PART)}`);
+  }
+  return [...names, COMPLETE];
+}
+
+/** A gesture read back from its folder names, or null; also reads the former one-name format. */
+export function decodeGesture(names: string[]): Partial<GestureSetting> | null {
+  if (!names.includes(COMPLETE)) {
+    return decodeJson(names[0] ?? null);
+  }
+  const value = decodeJson(names.find(n => n.startsWith('v~'))?.slice(2) ?? null);
+  if (!value) {
+    return null;
+  }
+  const parts = names
+    .filter(n => n.startsWith('f~'))
+    .sort()
+    .map(n => n.slice(n.indexOf('~', 2) + 1));
+  if (parts.length) {
+    try {
+      value.file = decodeURIComponent(parts.join(''));
+    } catch {
+      // unreadable path: the gesture keeps no file
+    }
+  }
+  return value;
+}
+
 function decodeJson(name: string | null): any {
   if (!name) {
     return null;
@@ -139,7 +181,10 @@ export async function loadSettings() {
     const next = clone(DEFAULTS);
     let found = false;
     for (const g of GESTURES) {
-      const saved = decodeJson((await list(`${dir}/gestures/${g.id}`))[0] ?? null);
+      // `<id>.new` is a save that was not renamed into place (interrupted).
+      const saved =
+        decodeGesture(await list(`${dir}/gestures/${g.id}`)) ??
+        decodeGesture(await list(`${dir}/gestures/${g.id}.new`));
       if (saved) {
         next[g.id] = {...next[g.id], ...saved};
         found = true;
@@ -172,14 +217,25 @@ function persist(id: GestureId) {
         return; // a newer value will be written
       }
       const dir = await settingsDir();
-      const name = encodeURIComponent(JSON.stringify(snapshot));
-      if (!dir || name.length > 240) {
-        return; // keep in memory only (very long file path)
+      if (!dir) {
+        return;
       }
+      // Written aside first: the saved gesture is replaced only by a complete one.
       const gestureDir = `${dir}/gestures/${id}`;
+      const next = `${gestureDir}.new`;
+      await FileUtils.deleteDir(next);
+      await FileUtils.makeDir(`${dir}/gestures`);
+      if (!(await FileUtils.makeDir(next))) {
+        return;
+      }
+      for (const name of encodeGesture(snapshot)) {
+        if (!(await FileUtils.makeDir(`${next}/${name}`))) {
+          console.warn('[SwipeSwitch] saveSettings: could not write', name);
+          return;
+        }
+      }
       await FileUtils.deleteDir(gestureDir);
-      await FileUtils.makeDir(gestureDir);
-      await FileUtils.makeDir(`${gestureDir}/${name}`);
+      await FileUtils.renameToFile(next, gestureDir);
     })
     .catch(e => console.warn('[SwipeSwitch] saveSettings', e));
 }
