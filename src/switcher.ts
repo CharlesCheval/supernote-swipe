@@ -1,5 +1,12 @@
 import {Dimensions, PixelRatio} from 'react-native';
-import {NativePluginManager, NativeUIUtils, PluginCommAPI, PluginFileAPI, PluginManager} from 'sn-plugin-lib';
+import {
+  NativePluginManager,
+  NativeUIUtils,
+  PluginCommAPI,
+  PluginFileAPI,
+  PluginManager,
+  PluginNoteAPI,
+} from 'sn-plugin-lib';
 import {Frame, learnFrame, toLogical, watchedDirections} from './directions';
 import {Motion, MultiFingerSwipe, TOOL_PEN} from './gesture';
 import {kindOf, lastOfKind, loadRecent, previousFile, remember} from './recent';
@@ -16,8 +23,11 @@ function screenPx(): {w: number; h: number} {
 
 /** Each finger must travel at least 15% of the screen along the swipe axis. */
 const MIN_DISTANCE_RATIO = 0.15;
-/** No swipe while the pen is in use (e.g. a resting palm during a lasso). */
-const PEN_QUIET_MS = 400;
+/**
+ * No swipe while the pen is in use (e.g. a resting palm during a lasso), nor
+ * right after: the last strokes must reach the note before it is left.
+ */
+const PEN_QUIET_MS = 1000;
 
 // ---------------------------------------------------------------------------
 // Orientation
@@ -164,10 +174,57 @@ async function notify(message: string) {
   }
 }
 
-/** Opens a file at its last read page. */
+let writeGranted = false;
+
+async function ensureWritePermission(): Promise<boolean> {
+  if (writeGranted) {
+    return true;
+  }
+  const permission = 'plugin.permission.FILE:WRITE';
+  if ((await PluginManager.hasPermission(permission)) < 1) {
+    const choice = await PluginManager.requestPermission(
+      permission,
+      'SwipeSwitch saves the open note before switching, so that nothing written is lost.',
+    );
+    if (choice !== 1 && choice !== 2) {
+      return false;
+    }
+  }
+  writeGranted = true;
+  return true;
+}
+
+/**
+ * Saves the open note before another file is opened. Opening a file while a
+ * note still holds unsaved writing lost a large part of it and moved strokes
+ * (reported on a Manta); the SDK asks for saveCurrentNote before working on
+ * the open file. If the note cannot be saved, the switch is cancelled.
+ */
+async function saveOpenNote(): Promise<boolean> {
+  const current = await currentFile().catch(() => null);
+  if (!current || kindOf(current) !== 'note') {
+    return true; // a PDF or document: nothing to save
+  }
+  if (!(await ensureWritePermission())) {
+    await notify('Switch cancelled: SwipeSwitch needs the write permission to save the note before leaving it.');
+    return false;
+  }
+  const res: any = await PluginNoteAPI.saveCurrentNote();
+  if (!res?.success || res.result === false) {
+    const why = res?.error?.message ?? 'save failed';
+    await notify(`Switch cancelled: the note could not be saved (${why}). Nothing was changed.`);
+    return false;
+  }
+  return true;
+}
+
+/** Opens a file at its last read page, after saving the open note. */
 export async function openPath(target: string): Promise<void> {
   if (!(await ensureReadPermission())) {
     await notify('Read permission denied: the file cannot be opened.');
+    return;
+  }
+  if (!(await saveOpenNote())) {
     return;
   }
   const res: any = await PluginFileAPI.openFile(target, -1);
