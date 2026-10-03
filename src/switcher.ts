@@ -154,7 +154,7 @@ async function ensureReadPermission(): Promise<boolean> {
   }
   const permission = 'plugin.permission.FILE:READ';
   if ((await PluginManager.hasPermission(permission)) < 1) {
-    const choice = await PluginManager.requestPermission(permission, 'SwipeSwitch needs to open your notes and documents.');
+    const choice = await PluginManager.requestPermission(permission, 'Swipe needs to open your notes and documents.');
     if (choice !== 1 && choice !== 2) {
       return false;
     }
@@ -167,7 +167,7 @@ async function notify(message: string) {
   try {
     await NativeUIUtils.showRattaDialog(message, '', 'OK', false);
   } catch {
-    console.warn('[SwipeSwitch]', message);
+    console.warn('[Swipe]', message);
   }
 }
 
@@ -181,7 +181,7 @@ async function ensureWritePermission(): Promise<boolean> {
   if ((await PluginManager.hasPermission(permission)) < 1) {
     const choice = await PluginManager.requestPermission(
       permission,
-      'SwipeSwitch saves the open note before switching, so that nothing written is lost.',
+      'Swipe saves the open note before switching, so that nothing written is lost.',
     );
     if (choice !== 1 && choice !== 2) {
       return false;
@@ -203,7 +203,7 @@ async function saveOpenNote(): Promise<boolean> {
     return true; // a PDF or document: nothing to save
   }
   if (!(await ensureWritePermission())) {
-    await notify('Switch cancelled: SwipeSwitch needs the write permission to save the note before leaving it.');
+    await notify('Switch cancelled: Swipe needs the write permission to save the note before leaving it.');
     return false;
   }
   const res: any = await PluginNoteAPI.saveCurrentNote();

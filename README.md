@@ -1,4 +1,4 @@
-# SwipeSwitch — Supernote plugin
+# Swipe — Supernote plugin
 
 Multi-finger swipes that move you around your files, in notes and PDFs. Formerly **PDF ⇄ Note Swipe**.
 
@@ -22,7 +22,7 @@ Files open on the page you last read.
 
 Settings from earlier versions are migrated automatically.
 
-The settings live under **Settings → Apps → Plugins → SwipeSwitch**. The plugin adds no toolbar button. The settings screen also shows the detected orientation and the last recognized swipe. It offers a **swap up/down in landscape** option, in case your device reports its rotation the other way round.
+The settings live under **Settings → Apps → Plugins → Swipe**. The plugin adds no toolbar button. The settings screen also shows the detected orientation and the last recognized swipe. It offers a **swap up/down in landscape** option, in case your device reports its rotation the other way round.
 
 ## Limitations
 

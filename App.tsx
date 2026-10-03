@@ -72,7 +72,7 @@ async function chooseFile(id: GestureId) {
       updateGesture(id, {file: picked[0]});
     }
   } catch (e) {
-    console.warn('[SwipeSwitch] selectFile', e);
+    console.warn('[Swipe] selectFile', e);
   }
 }
 
@@ -119,7 +119,7 @@ function SettingsScreen() {
   const flip = getOptions().landscapeFlip;
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Header title="SwipeSwitch settings" />
+      <Header title="Swipe settings" />
       <Text style={styles.intro}>
         Choose what each multi-finger swipe does, and in which orientation. In landscape, two-finger swipes already
         scroll the page, so three fingers are used there by default.

@@ -118,7 +118,7 @@ export function loadRecent(): Promise<void> {
       // Paths seen during this session (before loading finished) stay in front.
       history = [...history, ...saved.filter(p => !history.includes(p))].slice(0, HISTORY_SIZE);
       listeners.forEach(fn => fn());
-    })().catch(e => console.warn('[SwipeSwitch] loadRecent', e));
+    })().catch(e => console.warn('[Swipe] loadRecent', e));
   }
   return loaded;
 }
@@ -152,5 +152,5 @@ export function remember(path: string | null | undefined) {
   history = pushHistory(history, path);
   listeners.forEach(fn => fn());
   const snapshot = history;
-  writes = writes.then(() => persist(snapshot)).catch(e => console.warn('[SwipeSwitch] remember', e));
+  writes = writes.then(() => persist(snapshot)).catch(e => console.warn('[Swipe] remember', e));
 }

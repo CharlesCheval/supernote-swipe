@@ -203,7 +203,7 @@ export async function loadSettings() {
     current = next;
     notify();
   } catch (e) {
-    console.warn('[SwipeSwitch] loadSettings', e);
+    console.warn('[Swipe] loadSettings', e);
   }
 }
 
@@ -230,14 +230,14 @@ function persist(id: GestureId) {
       }
       for (const name of encodeGesture(snapshot)) {
         if (!(await FileUtils.makeDir(`${next}/${name}`))) {
-          console.warn('[SwipeSwitch] saveSettings: could not write', name);
+          console.warn('[Swipe] saveSettings: could not write', name);
           return;
         }
       }
       await FileUtils.deleteDir(gestureDir);
       await FileUtils.renameToFile(next, gestureDir);
     })
-    .catch(e => console.warn('[SwipeSwitch] saveSettings', e));
+    .catch(e => console.warn('[Swipe] saveSettings', e));
 }
 
 export function updateGesture(id: GestureId, patch: Partial<GestureSetting>) {
@@ -258,7 +258,7 @@ function persistOptions() {
       await FileUtils.makeDir(`${dir}/options`);
       await FileUtils.makeDir(`${dir}/options/${encodeURIComponent(JSON.stringify(snapshot))}`);
     })
-    .catch(e => console.warn('[SwipeSwitch] saveOptions', e));
+    .catch(e => console.warn('[Swipe] saveOptions', e));
 }
 
 export function updateOptions(patch: Partial<Options>) {
