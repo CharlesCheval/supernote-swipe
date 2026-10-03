@@ -44,7 +44,7 @@ The settings live under **Settings → Apps → Plugins → Swipe**. The plugin 
 
 ## Install
 
-1. Download `Swipe.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-swipeswitch/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
+1. Download `Swipe.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-swipe/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
 2. Open **Settings → Apps → Plugins → Add plugin**. It replaces SwipeSwitch in place, settings included.
 3. On the first swipe, allow file access with **Always allow** (reading to open files, writing to save the open note first).
 
