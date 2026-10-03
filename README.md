@@ -1,6 +1,6 @@
 # Swipe — Supernote plugin
 
-Multi-finger swipes that move you around your files, in notes and PDFs. Formerly **PDF ⇄ Note Swipe**.
+Multi-finger swipes that move you around your files, in notes and PDFs. Formerly **SwipeSwitch** (and before that **PDF ⇄ Note Swipe**).
 
 ## Gestures
 
@@ -33,6 +33,7 @@ The settings live under **Settings → Apps → Plugins → Swipe**. The plugin 
 ## How it works
 
 - **History:** the SDK does not expose Supernote's "Last Open" history. The plugin keeps its own: on every finger or pen touch, it records the displayed file (12 most recent).
+- **Nothing written is lost:** the open note is saved (`saveCurrentNote`) before switching to another file. If it cannot be saved, the switch is cancelled.
 - **Persistence:** history and settings survive restarts. They are stored in the plugin's private directory as folder names, because the SDK has no API to write a text file.
 - **Detection:**
   - every finger travels at least 15% of the screen, in under 0.9 s, roughly straight;
@@ -43,15 +44,15 @@ The settings live under **Settings → Apps → Plugins → Swipe**. The plugin 
 
 ## Install
 
-1. Download `SwipeSwitch.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-swipeswitch/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
-2. Open **Settings → Apps → Plugins → Add plugin**. It replaces PDF ⇄ Note Swipe in place.
-3. On the first swipe, allow file reading with **Always allow**.
+1. Download `Swipe.snplg` from the [latest release](https://github.com/CharlesCheval/supernote-swipeswitch/releases/latest) and copy it to the device's `MyStyle` folder (USB, Supernote Partner or Browse & Access).
+2. Open **Settings → Apps → Plugins → Add plugin**. It replaces SwipeSwitch in place, settings included.
+3. On the first swipe, allow file access with **Always allow** (reading to open files, writing to save the open note first).
 
 ## Build
 
 ```bash
 npm install
-npm run build   # -> build/outputs/SwipeSwitch.snplg
+npm run build   # -> build/outputs/SwipeSwitch.snplg (the plugin key stays SwipeSwitch)
 npx jest        # gesture, direction, history and settings tests
 ```
 
@@ -64,7 +65,7 @@ git tag v<versionName>
 git push origin v<versionName>
 ```
 
-GitHub Actions runs the tests, builds `SwipeSwitch.snplg` and attaches it to the release.
+GitHub Actions runs the tests, builds the plugin and attaches it to the release as `Swipe.snplg`.
 
 ## License
 
