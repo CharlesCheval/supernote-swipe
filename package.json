@@ -1,6 +1,6 @@
 {
   "name": "SwipeSwitch",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -40,7 +40,7 @@
   },
   "description": "Multi-finger swipes for Supernote: jump between PDF and note, go back to the previous file, open a pinned file or your recent files.",
   "author": "Charles Cheval",
-  "license": "MIT",
+  "license": "CC-BY-NC-SA-4.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/CharlesCheval/supernote-swipe.git"

@@ -69,4 +69,4 @@ GitHub Actions runs the tests, builds the plugin and attaches it to the release 
 
 ## License
 
-[MIT](LICENSE) © Charles Cheval. Not affiliated with Ratta / Supernote.
+[CC BY-NC-SA 4.0](LICENSE) © Charles Cheval: free to use, share and adapt, **no commercial use**. Releases up to v0.8.1 were published under MIT. Not affiliated with Ratta / Supernote.
