@@ -142,6 +142,26 @@ function track(e: Motion) {
   refreshOrientation();
 }
 
+/** Last time a pen stroke read the displayed file (for the recent files). */
+let penReadAt = 0;
+const PEN_READ_EVERY_MS = 10000;
+
+/**
+ * Pen strokes never make a gesture: no host call for each of them (the
+ * orientation is read again by the next finger touch). The displayed file is
+ * still read now and then, so that a note only written in with the pen
+ * enters the recent files.
+ */
+function trackPen(e: Motion) {
+  if (e.action !== 0 || Date.now() - penReadAt < PEN_READ_EVERY_MS) {
+    return;
+  }
+  penReadAt = Date.now();
+  currentFile()
+    .then(path => remember(path))
+    .catch(() => undefined);
+}
+
 // ---------------------------------------------------------------------------
 // Actions
 // ---------------------------------------------------------------------------
@@ -297,15 +317,22 @@ export function start() {
       if (!e || !Array.isArray(e.pointers)) {
         return;
       }
+      // Pen first, with as little work as possible: most events are pen events.
+      if (e.toolType === TOOL_PEN || e.pointers.some(p => p.toolType === TOOL_PEN)) {
+        lastPenAt = Date.now();
+        trackPen(e);
+        if (frame === 'unknown' && isLandscape()) {
+          for (const p of e.pointers) {
+            frame = learnFrame(frame, p, screenPx().w);
+          }
+        }
+        return;
+      }
       track(e);
       if (isLandscape()) {
         for (const p of e.pointers) {
           frame = learnFrame(frame, p, screenPx().w);
         }
-      }
-      if (e.toolType === TOOL_PEN || e.pointers.some(p => p.toolType === TOOL_PEN)) {
-        lastPenAt = Date.now();
-        return;
       }
       const swipe = detector.feed(e);
       if (!swipe || Date.now() - lastPenAt <= PEN_QUIET_MS) {
