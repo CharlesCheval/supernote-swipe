@@ -277,13 +277,22 @@ export function targetFor(action: Action, current: string | null, file?: string)
   }
 }
 
-let running = false;
+/**
+ * When the action in progress started (0: none). A host call that never
+ * answers (a dialog that cannot show, a stuck open) used to keep the action
+ * "running" for good: every later swipe was recognised but did nothing
+ * (reported). After ACTION_STUCK_MS a new swipe runs anyway; checked on the
+ * swipe itself, as the host may stall the plugin's timers.
+ */
+let runningSince = 0;
+const ACTION_STUCK_MS = 10000;
 
 async function runAction(action: Action, file?: string) {
-  if (running || action === 'none') {
+  if (action === 'none' || (runningSince && Date.now() - runningSince < ACTION_STUCK_MS)) {
     return;
   }
-  running = true;
+  const started = Date.now();
+  runningSince = started;
   try {
     if (action === 'recent') {
       await loadRecent();
@@ -300,7 +309,9 @@ async function runAction(action: Action, file?: string) {
   } catch (e: any) {
     await notify(`Error: ${e?.message ?? e}`);
   } finally {
-    running = false;
+    if (runningSince === started) {
+      runningSince = 0;
+    }
   }
 }
 
