@@ -10,7 +10,7 @@ import {FileUtils, PluginManager} from 'sn-plugin-lib';
  * with a file path inside.
  */
 
-export type Action = 'none' | 'toggle' | 'previous' | 'lastNote' | 'lastDoc' | 'file' | 'recent';
+export type Action = 'none' | 'toggle' | 'previous' | 'lastNote' | 'lastDoc' | 'file' | 'recent' | 'firstPage' | 'lastPage';
 
 export const ACTIONS: {id: Action; label: string}[] = [
   {id: 'none', label: 'Nothing'},
@@ -20,6 +20,8 @@ export const ACTIONS: {id: Action; label: string}[] = [
   {id: 'lastDoc', label: 'Last PDF / document'},
   {id: 'file', label: 'Open a specific file'},
   {id: 'recent', label: 'Recent files list'},
+  {id: 'firstPage', label: 'First page'},
+  {id: 'lastPage', label: 'Last page'},
 ];
 
 export type GestureId = '2-up' | '2-down' | '3-up' | '3-down';

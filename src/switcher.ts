@@ -5,6 +5,7 @@ import {
   PluginCommAPI,
   PluginFileAPI,
   PluginManager,
+  PluginDocAPI,
   PluginNoteAPI,
 } from 'sn-plugin-lib';
 import {Frame, learnFrame, toLogical, watchedDirections} from './directions';
@@ -284,6 +285,55 @@ export function targetFor(action: Action, current: string | null, file?: string)
  * (reported). After ACTION_STUCK_MS a new swipe runs anyway; checked on the
  * swipe itself, as the host may stall the plugin's timers.
  */
+/** The page index (from 0) to jump to, or null when the page count is unknown. */
+export function targetPage(which: 'firstPage' | 'lastPage', total: number | null): number | null {
+  if (which === 'firstPage') {
+    return 0;
+  }
+  return typeof total === 'number' && total >= 1 ? total - 1 : null;
+}
+
+/**
+ * First or last page of the open note or document. The note's page count is
+ * read from its file (what is saved); a document's from the open document.
+ * Nothing is saved first: saving would clear the undo history, and staying in
+ * the same file loses nothing.
+ */
+async function jumpWithinFile(which: 'firstPage' | 'lastPage', current: string | null): Promise<void> {
+  const path = current ?? (await currentFile().catch(() => null));
+  if (!path) {
+    await notify('No note or document is open.');
+    return;
+  }
+  let total: number | null = null;
+  if (which === 'lastPage') {
+    if (kindOf(path) === 'note') {
+      if (!(await ensureReadPermission())) {
+        await notify('Read permission denied: the number of pages cannot be read.');
+        return;
+      }
+      const res: any = await PluginFileAPI.getNoteTotalPageNum(path);
+      total = res?.success ? res.result : null;
+    } else {
+      const res: any = await PluginDocAPI.getCurrentTotalPages();
+      total = res?.success ? res.result : null;
+    }
+  }
+  const page = targetPage(which, total);
+  if (page == null) {
+    await notify('The number of pages could not be read.');
+    return;
+  }
+  const now: any = await PluginCommAPI.getCurrentPageNum();
+  if (now?.success && now.result === page) {
+    return; // already there
+  }
+  const res: any = await PluginCommAPI.jumpToPage(page);
+  if (!res?.success || res.result === false) {
+    await notify(`Cannot go to page ${page + 1}.`);
+  }
+}
+
 let runningSince = 0;
 const ACTION_STUCK_MS = 10000;
 
@@ -297,6 +347,10 @@ async function runAction(action: Action, file?: string) {
     if (action === 'recent') {
       await loadRecent();
       showView('recent');
+      return;
+    }
+    if (action === 'firstPage' || action === 'lastPage') {
+      await jumpWithinFile(action, await tracked);
       return;
     }
     const [current] = await Promise.all([tracked, loadRecent()]);

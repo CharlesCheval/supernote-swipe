@@ -6,13 +6,14 @@ Multi-finger swipes that move you around your files, in notes and PDFs. Formerly
 
 Four gestures: **2 or 3 fingers, up or down**. Each one gets an action, and you choose whether it is active in portrait, in landscape, or both.
 
-| Action | What it opens |
+| Action | What it does |
 |---|---|
 | PDF ⇄ Note | From a note, the last PDF/document; from a PDF, the last note |
 | Previous file | The file you had open before this one, whatever its type ("back") |
 | Last note / Last PDF | The most recent file of that kind |
 | Open a specific file | A file you pick in Supernote's file browser |
 | Recent files list | Your 12 most recent files; tap one to open it |
+| First page / Last page | The first or last page of the open note or document (a note's page count is read from its saved file) |
 
 Files open on the page you last read.
 

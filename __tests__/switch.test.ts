@@ -20,7 +20,7 @@ jest.mock('sn-plugin-lib', () => ({
   PluginManager: {hasPermission: jest.fn(async () => 1), registerMotionListener: jest.fn(), getPluginDirPath: jest.fn(async () => null)},
   FileUtils: {},
 }));
-import {openPath} from '../src/switcher';
+import {openPath, targetPage} from '../src/switcher';
 
 beforeEach(() => {
   mockOrder.length = 0;
@@ -43,4 +43,12 @@ test('leaving a PDF: nothing to save', async () => {
   mockCurrent = '/storage/emulated/0/Document/livre.pdf';
   await openPath('/storage/emulated/0/Note/cours.note');
   expect(mockOrder).toEqual(['open']);
+});
+
+test('first and last page: index from 0, nothing when the page count is unknown', () => {
+  expect(targetPage('firstPage', null)).toBe(0);
+  expect(targetPage('lastPage', 12)).toBe(11);
+  expect(targetPage('lastPage', 1)).toBe(0);
+  expect(targetPage('lastPage', null)).toBeNull();
+  expect(targetPage('lastPage', 0)).toBeNull();
 });
