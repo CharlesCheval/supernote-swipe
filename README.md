@@ -59,12 +59,7 @@ npx jest        # gesture, direction, history and settings tests
 
 ## Releasing
 
-Bump `versionName` **and** `versionCode` in `PluginConfig.json` (the device only upgrades when `versionCode` increases), commit, then push a matching tag:
-
-```bash
-git tag v<versionName>
-git push origin v<versionName>
-```
+Bump `versionName` **and** `versionCode` in `PluginConfig.json` (the device only upgrades when `versionCode` increases) and update `RELEASE_NOTES.md` (it becomes the release's description), commit, then push a matching tag (`git tag v<versionName> && git push origin v<versionName>`), or run the **Release** workflow by hand on `main` (Actions → Release → Run workflow): the tag is then made from `versionName`.
 
 GitHub Actions runs the tests, builds the plugin and attaches it to the release as `Swipe.snplg`.
 
